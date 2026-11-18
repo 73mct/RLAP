@@ -1,0 +1,62 @@
+
+name: Build LOOP APK from ZIP
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download repository files
+        uses: actions/checkout@v4
+
+      - name: Extract LOOP project ZIP
+        run: |
+          ZIP_FILE="LOOP-Vault-Android.zip"
+          if [ ! -f "$ZIP_FILE" ]; then
+            echo "Cannot find $ZIP_FILE in repository root"
+            exit 1
+          fi
+          mkdir extracted
+          unzip -q "$ZIP_FILE" -d extracted
+          PROJECT_DIR=$(dirname "$(find extracted -name settings.gradle -print -quit)")
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "Could not find Android project"
+            exit 1
+          fi
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platforms;android-36 build-tools;36.0.0'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+
+      - name: Build APK
+        run: |
+          cd "$PROJECT_DIR"
+          gradle --no-daemon :app:assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: LOOP-Private-Reels-APK
+          path: extracted/loop-vault-android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
